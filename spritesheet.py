@@ -41,7 +41,7 @@ def loopFolders(baseDir, imagesPerRow, onlyAnimations, generateFullSpritesheet=F
     folders_to_output.append((fullDir, outputPartialSheet))
   
   for inputDir, outputFile in folders_to_output:
-    print(f"[+] Animation '{inputDir}' to '{outputFile}'")
+    print(f"[+] Generating spritesheet '{inputDir}' to '{outputFile}'")
     handleImages(inputDir, imagesPerRow, outputFile)
   
   if len(folders_to_output) > 1 and generateFullSpritesheet:
