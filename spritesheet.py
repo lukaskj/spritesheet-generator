@@ -4,11 +4,12 @@ import os
 import math
 import getopt
 import sys
+import re
 
-images: List[Image.Image] = []
-imagesFolder: AnyStr = 'images'
-outputFile: AnyStr = "spritesheet.png"
-imagesPerRow = 5
+Image.MAX_IMAGE_PIXELS = None
+
+# USAGE
+#   $ python spritesheet.py --imagesPerRow 20 --generateFullSpritesheet --only idle,walk swordsman <input folder>
 
 def absoluteFilePaths(directory):
   if not os.path.isdir(directory):
@@ -20,21 +21,43 @@ def absoluteFilePaths(directory):
       # yield os.path.abspath(os.path.join(dirpath, f))
   return result
 
-def main():
-  imagesFilename = absoluteFilePaths(imagesFolder)
-  print("Total images", len(imagesFilename))
 
-  try:
-    for filename in imagesFilename:
-      imageObj = Image.open(filename)
-      images.append(imageObj)
-      
-    handleImages(images)
-  finally:
-    closeAllImages()
+def loopFolders(baseDir, imagesPerRow, onlyAnimations, generateFullSpritesheet=False):
+  spritesheetsOutputFolder = 'output'
+  spritesheetsOutputFolderFull = os.path.join(baseDir, spritesheetsOutputFolder)
+  if not os.path.exists(spritesheetsOutputFolderFull):
+    os.mkdir(spritesheetsOutputFolderFull)
 
+  allAnimations = len(onlyAnimations) == 0 or onlyAnimations == None
+  
+  folders_to_output = []
+  for fdir in os.listdir(baseDir):
+    fullDir = os.path.join(baseDir, fdir)
+    if not os.path.isdir(fullDir) or fdir == spritesheetsOutputFolder:
+      continue
+    if not allAnimations and (fdir not in onlyAnimations):
+      continue
+    outputPartialSheet = os.path.join(spritesheetsOutputFolderFull, re.sub(r'[^a-zA-Z0-9]', '-', fullDir) + ".png")
+    folders_to_output.append((fullDir, outputPartialSheet))
+  
+  for inputDir, outputFile in folders_to_output:
+    print(f"[+] Animation '{inputDir}' to '{outputFile}'")
+    handleImages(inputDir, imagesPerRow, outputFile)
+  
+  if len(folders_to_output) > 1 and generateFullSpritesheet:
+    fullSpritesheetFile = os.path.join(baseDir, re.sub(r'[^a-zA-Z0-9]', '-', baseDir) + "-full.png")
+    print(f"[+] Generating full spritesheet at '{fullSpritesheetFile}'")
+    handleImages(spritesheetsOutputFolderFull, 1, fullSpritesheetFile)
+  else:
+    print("[-] Not generating full spritesheet.")
 
-def handleImages(imageObjs: List[Image.Image]):
+def handleImages(baseDir, imagesPerRow, outputFile):
+  imageObjs: List[Image.Image] = []
+  imagesList = absoluteFilePaths(baseDir)
+  for filename in imagesList:
+    imageObj = Image.open(filename)
+    imageObjs.append(imageObj)
+  
   maxWidth = 0
   maxHeight = 0
   # get largest width and height
@@ -57,32 +80,39 @@ def handleImages(imageObjs: List[Image.Image]):
       spriteW = col * maxWidth
       spriteH = row * maxHeight
       spriteSheet.paste(image, (spriteW, spriteH))
+      image.close()
     spriteSheet.save(outputFile, 'PNG')
   finally:
     spriteSheet.close()
+    closeAllImages(imageObjs)
 
 
-def parseOpts():
-  global outputFile, imagesFolder, imagesPerRow
-  options, arguments = getopt.getopt(sys.argv[1:], 'o:i:',["output=", "imagesPerRow="])
-  for o, a in options:
-    if o in ("-o", "--output"):
-      outputFile = a
-    if o in ("-i", "--imagesPerRow"):
-      imagesPerRow = int(a)
-  if len(arguments) > 0:
-    imagesFolder = arguments[0]
-
-
-
-def closeAllImages():
-  print("Closing all images")
+def closeAllImages(images):
   for image in images:
       image.close()
+
+def parseOpts():
+  # global outputFile, imagesFolder, imagesPerRow
+  result = {
+    'imagesPerRow': 5,
+    'imagesFolder': 'images',
+    'generateFullSpritesheet': False,
+    'only': []
+  }
+  options, arguments = getopt.getopt(sys.argv[1:], 'go:i:',["generateFullSpritesheet", "only=", "imagesPerRow="])
   
-  # for filename in imagesFilename:
-  #   print(filename)
+  for o, a in options:
+    if o in ("-o", "--only"):
+      result['only'] = a.split(",")
+    if o in ("-i", "--imagesPerRow"):
+      result['imagesPerRow'] = int(a)
+    if o in ("-g", "--generateFullSpritesheet"):
+      result['generateFullSpritesheet'] = True
+  if len(arguments) > 0:
+    result['imagesFolder'] = arguments[0]
+
+  return result
 
 if __name__ == '__main__':
-  parseOpts()
-  main()
+  opts = parseOpts()
+  loopFolders(opts['imagesFolder'], opts['imagesPerRow'], opts['only'], opts['generateFullSpritesheet'])
